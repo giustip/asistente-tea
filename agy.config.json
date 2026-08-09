@@ -1,0 +1,16 @@
+{
+  "name": "asistente-familiar-tea",
+  "version": "1.0.0",
+  "description": "Agente de Estructura Familiar y Control TEA",
+  "model": "gemini-3.6-flash",
+  "system_prompt_file": "system_prompt.md",
+  "workspace_rules": {
+    "auto_discover_skills": true,
+    "skills_directory": ".agents/skills",
+    "mcp_config_file": ".agents/mcp_config.json"
+  },
+  "parameters": {
+    "temperature": 0.2,
+    "top_p": 0.95
+  }
+}
