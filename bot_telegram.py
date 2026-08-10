@@ -13,6 +13,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 from google import genai
 import edge_tts
 
+# Logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -26,18 +27,18 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Gestión persistente del nombre del asistente
 NAME_FILE = "assistant_name.txt"
 
 def get_assistant_name() -> str:
     if os.path.exists(NAME_FILE):
         with open(NAME_FILE, "r") as f:
-            return f.read().strip() or "Catalina"
-    return "Catalina"
+            name = f.read().strip()
+            return name if name else "TEA ia"
+    return "TEA ia"
 
 def set_assistant_name(new_name: str):
     with open(NAME_FILE, "w") as f:
-        f.write(new_name)
+        f.write(new_name.strip())
 
 def check_oauth_expiration_warning() -> str:
     token_path = "token.json"
@@ -63,14 +64,27 @@ def check_oauth_expiration_warning() -> str:
 async def execute_agy_prompt(user_prompt: str) -> str:
     current_name = get_assistant_name()
     
-    # Detección de cambio de nombre
-    match_name = re.search(r'(?:ahora te llamas|tu nombre es|llámate|quiero que te llames|puedo llamarte)\s+([A-Za-zÁéíóúÁÉÍÓÚñÑ]+)', user_prompt, re.IGNORECASE)
+    # Capturar nombres compuestos de hasta 4 palabras (ej. "TEA ia") y más variantes verbales
+    match_name = re.search(
+        r'(?:ahora te llamas|tu nombre es|llámate|quiero que te llames|puedo llamarte|te vas a llamar|se llama|llamarás|te llamaré)\s+([A-Za-z0-9ÁéíóúÁÉÍÓÚñÑ\s]{2,30}?)(?=[.,!?\n]|$)',
+        user_prompt, re.IGNORECASE
+    )
     if match_name:
-        current_name = match_name.group(1).capitalize()
-        set_assistant_name(current_name)
+        extracted_name = match_name.group(1).strip()
+        if 1 <= len(extracted_name.split()) <= 4:
+            current_name = extracted_name
+            set_assistant_name(current_name)
+
+    # Inyección de contexto temporal exacto para Google Calendar
+    now_context = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
 
     try:
-        contextualized_prompt = f"[Contexto de Sistema: Tu nombre asignado por la familia es '{current_name}'. Eres únicamente el Asistente Familiar TEA. PROHIBIDO ofrecer videojuegos o temas de código.] Usuario dice: {user_prompt}"
+        contextualized_prompt = (
+            f"[Contexto de Sistema: Tu nombre asignado es '{current_name}'. "
+            f"Fecha y hora actual del sistema: {now_context}. "
+            f"Eres el Asistente Familiar TEA. PROHIBIDO ofrecer videojuegos o código.] "
+            f"Usuario dice: {user_prompt}"
+        )
         safe_prompt = shlex.quote(contextualized_prompt)
         cmd = f"echo {safe_prompt} | agy run --config agy.config.json"
         
@@ -80,7 +94,7 @@ async def execute_agy_prompt(user_prompt: str) -> str:
             stderr=subprocess.PIPE
         )
         
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=40.0)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=45.0)
         
         output = stdout.decode("utf-8").strip()
         error_output = stderr.decode("utf-8").strip()
@@ -144,7 +158,7 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
     agent_response = await execute_agy_prompt(user_input_text)
     await processing_msg.delete()
 
-    current_name = get_assistant_name()  # Recargar por si cambió durante la ejecución
+    current_name = get_assistant_name()
 
     try:
         await update.message.reply_text(agent_response, parse_mode="Markdown")
