@@ -83,6 +83,7 @@ source venv/bin/activate
 3. **Instalar dependencias de Python:**
 ```bash
 pip install --upgrade pip
+pip install -r requirements.txt
 pip install python-telegram-bot google-genai edge-tts python-dotenv
 
 ```
@@ -98,8 +99,26 @@ GOOGLE_APPLICATION_CREDENTIALS="credentials.json"
 ```
 
 
-5. **Colocar credenciales de Google Calendar MCP:**
-Asegúrate de guardar tu archivo `credentials.json` en la raíz del proyecto para permitir que el MCP se autentique vía OAuth 2.0.
+5. **Configurar Google Cloud y autorizar Google Calendar (MCP):**
+
+   **5a. Crear credenciales OAuth en Google Cloud Console:**
+   - Ir a [console.cloud.google.com](https://console.cloud.google.com) y crear o seleccionar un proyecto.
+   - Habilitar la **Google Calendar API**: APIs y servicios → Biblioteca → buscar "Google Calendar API" → Habilitar.
+   - Crear credenciales: APIs y servicios → Credenciales → Crear credenciales → **ID de cliente OAuth 2.0** → Tipo: **Aplicación de escritorio**.
+   - Descargar el JSON y renombrarlo como `credentials.json` en la raíz del proyecto.
+
+   **5b. Agregar tu cuenta como usuario de prueba:**
+   - En Google Cloud Console → APIs y servicios → **Pantalla de consentimiento de OAuth**.
+   - Sección **"Usuarios de prueba"** → **+ Agregar usuarios** → introducir tu cuenta de Gmail → Guardar.
+
+   > ⚠️ **Importante:** Si omites este paso, recibirás el error `403: access_denied` al intentar autorizar.
+
+   **5c. Ejecutar la autorización inicial (una sola vez):**
+   ```bash
+   source venv/bin/activate
+   python3 tools/authorize_calendar.py
+   ```
+   Se abrirá el navegador → inicia sesión con tu cuenta de Gmail → acepta los permisos de Google Calendar → se genera el archivo `token.json` localmente. A partir de ahí el sistema funciona de forma desatendida y renueva el token automáticamente.
 
 ---
 
@@ -120,9 +139,11 @@ asistente-tea/
 │   ├── protocolo_sos.md
 │   └── decodificador_pragmatico.md
 ├── tools/
-│   └── google_calendar_mcp.py    # Servidor MCP stdio para Google Calendar
+│   ├── google_calendar_mcp.py    # Servidor MCP stdio — Google Calendar API v3 (real)
+│   └── authorize_calendar.py     # Script de autorización OAuth2 (ejecutar una sola vez)
 ├── assistant_name.txt            # Persistencia de identidad del agente
 ├── agy.config.json               # Configuración principal de agy CLI
+├── requirements.txt              # Dependencias de Python (Google Calendar API)
 ├── system_prompt.md              # Instrucciones maestras del agente
 ├── bot_telegram.py               # Script ejecutable principal
 └── .env                          # Variables de entorno secretas
@@ -236,6 +257,7 @@ source venv/bin/activate
 3. **Install Python dependencies:**
 ```bash
 pip install --upgrade pip
+pip install -r requirements.txt
 pip install python-telegram-bot google-genai edge-tts python-dotenv
 
 ```
@@ -251,8 +273,26 @@ GOOGLE_APPLICATION_CREDENTIALS="credentials.json"
 ```
 
 
-5. **Set up Google Calendar MCP Credentials:**
-Ensure `credentials.json` is placed in the project root to allow the MCP server to authenticate via OAuth 2.0.
+5. **Configure Google Cloud and authorize Google Calendar (MCP):**
+
+   **5a. Create OAuth credentials in Google Cloud Console:**
+   - Go to [console.cloud.google.com](https://console.cloud.google.com) and create or select a project.
+   - Enable the **Google Calendar API**: APIs & Services → Library → search "Google Calendar API" → Enable.
+   - Create credentials: APIs & Services → Credentials → Create Credentials → **OAuth 2.0 Client ID** → Application type: **Desktop app**.
+   - Download the JSON and rename it to `credentials.json` in the project root.
+
+   **5b. Add your account as a test user:**
+   - In Google Cloud Console → APIs & Services → **OAuth consent screen**.
+   - Under **"Test users"** → **+ Add Users** → enter your Gmail account → Save.
+
+   > ⚠️ **Important:** Skipping this step will result in a `403: access_denied` error during authorization.
+
+   **5c. Run the one-time authorization (run once only):**
+   ```bash
+   source venv/bin/activate
+   python3 tools/authorize_calendar.py
+   ```
+   A browser window will open → sign in with your Gmail account → grant Google Calendar permissions → `token.json` is generated locally. From this point, the system works autonomously and refreshes the token automatically.
 
 ---
 
@@ -273,9 +313,11 @@ asistente-tea/
 │   ├── protocolo_sos.md
 │   └── decodificador_pragmatico.md
 ├── tools/
-│   └── google_calendar_mcp.py    # Stdio MCP server for Google Calendar
+│   ├── google_calendar_mcp.py    # Stdio MCP server — Google Calendar API v3 (live)
+│   └── authorize_calendar.py     # One-time OAuth2 authorization script
 ├── assistant_name.txt            # Persistent agent identity storage
 ├── agy.config.json               # Main agy CLI configuration
+├── requirements.txt              # Python dependencies (Google Calendar API)
 ├── system_prompt.md              # Master system prompt
 ├── bot_telegram.py               # Executable entry point
 └── .env                          # Secret environment variables
