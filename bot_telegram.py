@@ -56,6 +56,9 @@ def check_oauth_expiration_warning() -> str:
 
             if hours_left <= 0:
                 return "\n\n⚠️ **Alerta OAuth:** La sesión de Google OAuth ha expirado. Vuelve a autenticarte para renovar `token.json`."
+            elif hours_left < 1:
+                minutes_left = int(hours_left * 60)
+                return f"\n\n⚠️ **Recordatorio OAuth:** La sesión de Google expira en {minutes_left} minutos."
             elif hours_left < 24:
                 return f"\n\n⚠️ **Recordatorio OAuth:** La sesión de Google expira en {int(hours_left)} horas."
     except Exception as e:
@@ -65,9 +68,8 @@ def check_oauth_expiration_warning() -> str:
 async def execute_agy_prompt(user_prompt: str) -> str:
     current_name = get_assistant_name()
     
-    # Captura de nombres compuestos de hasta 4 palabras (ej. "TEA ia")
     match_name = re.search(
-        r'(?:ahora te llamas|tu nombre es|llámate|quiero que te llames|puedo llamarte|te vas a llamar|se llama|llamarás|te llamaré)\s+([A-Za-z0-9ÁéíóúÁÉÍÓÚñÑ\s]{2,30}?)(?=[.,!?\n]|$)',
+        r'(?:ahora te llamas|tu nombre es|llámate|quiero que te llames|puedo llamarte|te vas a llamar|llamarás|te llamaré)\s+([A-Za-z0-9ÁéíóúÁÉÍÓÚñÑ\s]{2,30}?)(?=[.,!?\n]|$)',
         user_prompt, re.IGNORECASE
     )
     if match_name:
@@ -82,16 +84,25 @@ async def execute_agy_prompt(user_prompt: str) -> str:
         contextualized_prompt = (
             f"[Contexto de Sistema: Tu nombre asignado es '{current_name}'. "
             f"Fecha y hora actual del sistema: {now_context}. "
+            f"Tienes el servidor MCP de Google Calendar ACTIVO en la cuenta talessystems.hq@gmail.com. "
             f"Eres el Asistente Familiar TEA. PROHIBIDO ofrecer videojuegos o código.] "
             f"Usuario dice: {user_prompt}"
         )
         safe_prompt = shlex.quote(contextualized_prompt)
-        cmd = f"echo {safe_prompt} | agy run --config agy.config.json"
+        cmd = f"echo {safe_prompt} | agy run --config agy.config.json --dangerously-skip-permissions"
         
+        project_dir = os.path.dirname(os.path.abspath(__file__))
+
+        # Preparar variables de entorno heredando del sistema y forzando GOOGLE_APPLICATION_CREDENTIALS
+        env_vars = os.environ.copy()
+        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.join(project_dir, "credentials.json")
+
         process = await asyncio.create_subprocess_exec(
             "bash", "-c", cmd,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+            stderr=subprocess.PIPE,
+            cwd=project_dir,
+            env=env_vars  # Inyección de variables de entorno al proceso de agy y MCP
         )
         
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=45.0)

@@ -1,10 +1,10 @@
 {
   "mcpServers": {
     "google_calendar": {
-      "command": "python3",
-      "args": ["tools/google_calendar_mcp.py"],
+      "command": "/home/yoste/Documents/asistente-tea/venv/bin/python3",
+      "args": ["/home/yoste/Documents/asistente-tea/tools/google_calendar_mcp.py"],
       "env": {
-        "GOOGLE_APPLICATION_CREDENTIALS": "credentials.json"
+        "GOOGLE_APPLICATION_CREDENTIALS": "/home/yoste/Documents/asistente-tea/credentials.json"
       }
     }
   }
