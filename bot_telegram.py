@@ -10,10 +10,11 @@ import re
 from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.request import HTTPXRequest  # Importante para los timeouts de red
 from google import genai
 import edge_tts
 
-# Logging
+# 1. Logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -64,7 +65,7 @@ def check_oauth_expiration_warning() -> str:
 async def execute_agy_prompt(user_prompt: str) -> str:
     current_name = get_assistant_name()
     
-    # Capturar nombres compuestos de hasta 4 palabras (ej. "TEA ia") y más variantes verbales
+    # Captura de nombres compuestos de hasta 4 palabras (ej. "TEA ia")
     match_name = re.search(
         r'(?:ahora te llamas|tu nombre es|llámate|quiero que te llames|puedo llamarte|te vas a llamar|se llama|llamarás|te llamaré)\s+([A-Za-z0-9ÁéíóúÁÉÍÓÚñÑ\s]{2,30}?)(?=[.,!?\n]|$)',
         user_prompt, re.IGNORECASE
@@ -75,7 +76,6 @@ async def execute_agy_prompt(user_prompt: str) -> str:
             current_name = extracted_name
             set_assistant_name(current_name)
 
-    # Inyección de contexto temporal exacto para Google Calendar
     now_context = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
 
     try:
@@ -123,14 +123,17 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
     user_input_text = ""
     current_name = get_assistant_name()
 
+    # 1. Caso Nota de Voz
     if update.message.voice or update.message.audio:
         print("\n[Telegram] 🎙️ Transcribiendo audio con gemini-3.6-flash...")
         status_msg = await update.message.reply_text("🎙️ Transcribiendo audio...")
-        file_obj = await (update.message.voice or update.message.audio).get_file()
         voice_path = f"temp_{update.message.message_id}.ogg"
-        await file_obj.download_to_drive(voice_path)
 
         try:
+            # Descargar archivo con manejo seguro de timeouts
+            file_obj = await (update.message.voice or update.message.audio).get_file(read_timeout=60.0)
+            await file_obj.download_to_drive(voice_path, read_timeout=60.0)
+
             uploaded_file = ai_client.files.upload(file=voice_path)
             gemini_response = ai_client.models.generate_content(
                 model="gemini-3.6-flash",
@@ -138,15 +141,19 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
             )
             user_input_text = gemini_response.text.strip()
             print(f"[Transcripción Gemini 3.6 Flash]: {user_input_text}")
+
         except Exception as e:
-            logger.error(f"Error procesando audio en Gemini: {e}")
-            await status_msg.edit_text("❌ Error al procesar la nota de voz.")
+            logger.error(f"Error procesando/descargando audio en Telegram: {e}")
+            await status_msg.edit_text("❌ Hubo un problema de conexión al descargar la nota de voz. Por favor, reenvíala.")
+            if os.path.exists(voice_path):
+                os.remove(voice_path)
             return
         finally:
             if os.path.exists(voice_path):
                 os.remove(voice_path)
             await status_msg.delete()
     
+    # 2. Caso Texto Directo
     elif update.message.text:
         user_input_text = update.message.text.strip()
         print(f"\n[Telegram] 💬 Texto recibido: '{user_input_text}'")
@@ -179,9 +186,17 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Error en síntesis de voz: {e}")
 
 def main():
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    # Ampliación de timeouts de red HTTPX para Telegram
+    request_config = HTTPXRequest(
+        connect_timeout=30.0,
+        read_timeout=60.0,
+        write_timeout=30.0,
+        pool_timeout=30.0
+    )
+
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(request_config).build()
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO | filters.TEXT, handle_voice_or_text))
-    print(f"🤖 Bot iniciado (Nombre activo: {get_assistant_name()})...")
+    print(f"🤖 Bot iniciado (Timeouts de red ampliados / Nombre activo: {get_assistant_name()})...")
     app.run_polling()
 
 if __name__ == "__main__":
