@@ -14,7 +14,7 @@
 
 El **Asistente Familiar TEA** es un sistema agéntico desarrollado sobre **Antigravity (`agy CLI`)** y alimentado por **Gemini 3.6 Flash** a través del SDK de Google GenAI. Diseñado específicamente para familias con integrantes dentro del Espectro Autista (TEA), el asistente actúa como un orquestador de rutinas cotidianas, mediador cognitivo y soporte de autorregulación sensorial en tiempo real.
 
-El sistema interactúa de forma bidireccional mediante voz y texto a través de **Telegram**, ejecutando decisiones agénticas autónomas sobre la agenda de **Google Calendar** (vía protocolo MCP) y sintetizando respuestas habladas mediante **edge-tts**.
+El sistema interactúa de forma bidireccional mediante voz y texto a través de **Telegram**, ejecutando decisiones agénticas autónomas sobre la agenda de **Google Calendar** (integración directa con la API v3) y sintetizando respuestas habladas mediante **edge-tts**.
 
 ### Características Principales
 
@@ -33,19 +33,25 @@ El sistema interactúa de forma bidireccional mediante voz y texto a través de 
 [ Telegram Client (Audio/Texto) ]
                │
                ▼
-   [ bot_telegram.py (Python) ] ── (Auditoría OAuth token.json)
-               │
-      ┌────────┴────────────────────────┐
-      │                                 │ (Audio .ogg)
-      ▼                                 ▼
-[ agy CLI Engine ]             [ Google GenAI SDK ]
- (gemini-3.6-flash)             (gemini-3.6-flash STT)
-      │                                 │
-      ├── .agents/skills/               └──────► Transcripción a texto
-      └── MCP Google Calendar
+   [ bot_telegram.py (Python) ]
+      │         │         │
+      │         │         └── calendar_client.py ──► Google Calendar API v3
+      │         │                (pre-fetch eventos + ejecutar operaciones)
+      │         │
+      │         └── (Audio .ogg) ──► Google GenAI SDK (STT) ──► Transcripción
+      │
+      ▼
+[ agy CLI Engine ]
+ (gemini-3.6-flash)
+      │
+      ├── .agents/skills/
+      └── system_prompt.md
                │
                ▼
-   [ Respuesta Formateada ] ──► [ edge-tts Cloud ] ──► [ Salida Telegram (Audio + Texto) ]
+   [ Respuesta + [📅 OP] ] ──► bot parsea ops ──► Calendar API
+               │
+               ▼
+   [ edge-tts Cloud ] ──► [ Salida Telegram (Audio + Texto) ]
 
 ```
 
@@ -95,11 +101,12 @@ Crea un archivo `.env` en la raíz del proyecto:
 TELEGRAM_BOT_TOKEN="tu_token_de_telegram_aqui"
 GEMINI_API_KEY="tu_clave_api_gemini_aqui"
 GOOGLE_APPLICATION_CREDENTIALS="credentials.json"
+GOOGLE_CALENDAR_EMAIL="tu_correo@gmail.com"
 
 ```
 
 
-5. **Configurar Google Cloud y autorizar Google Calendar (MCP):**
+5. **Configurar Google Cloud y autorizar Google Calendar:**
 
    **5a. Crear credenciales OAuth en Google Cloud Console:**
    - Ir a [console.cloud.google.com](https://console.cloud.google.com) y crear o seleccionar un proyecto.
@@ -118,7 +125,7 @@ GOOGLE_APPLICATION_CREDENTIALS="credentials.json"
    source venv/bin/activate
    python3 tools/authorize_calendar.py
    ```
-   Se abrirá el navegador → inicia sesión con tu cuenta de Gmail → acepta los permisos de Google Calendar → se genera el archivo `token.json` localmente. A partir de ahí el sistema funciona de forma desatendida y renueva el token automáticamente.
+   Se abrirá el navegador → inicia sesión con tu cuenta de Gmail → acepta los permisos de Google Calendar → se genera el archivo `token.json` localmente.
 
 ---
 
@@ -127,26 +134,19 @@ GOOGLE_APPLICATION_CREDENTIALS="credentials.json"
 ```text
 asistente-tea/
 ├── .agents/
-│   ├── mcp_config.json          # Configuración del servidor MCP de Google Calendar
-│   └── skills/                   # Skills agénticas avanzadas
-│       ├── decodificador-pragmatico/
-│       ├── regulacion-pantallas/
-│       ├── alternativas-sin-pantalla/
-│       └── protocolo-sos/
-├── knowledge/                    # Bases de conocimiento en Markdown
-│   ├── pantallas_y_rutinas.md
-│   ├── nutricion_sgsc.md
-│   ├── protocolo_sos.md
-│   └── decodificador_pragmatico.md
+│   ├── mcp_config.json
+│   └── skills/
+├── knowledge/
 ├── tools/
-│   ├── google_calendar_mcp.py    # Servidor MCP stdio — Google Calendar API v3 (real)
-│   └── authorize_calendar.py     # Script de autorización OAuth2 (ejecutar una sola vez)
-├── assistant_name.txt            # Persistencia de identidad del agente
-├── agy.config.json               # Configuración principal de agy CLI
-├── requirements.txt              # Dependencias de Python (Google Calendar API)
-├── system_prompt.md              # Instrucciones maestras del agente
-├── bot_telegram.py               # Script ejecutable principal
-└── .env                          # Variables de entorno secretas
+│   ├── calendar_client.py        # Módulo central de interacción con Calendar
+│   ├── google_calendar_mcp.py
+│   └── authorize_calendar.py
+├── assistant_name.txt
+├── agy.config.json
+├── requirements.txt
+├── system_prompt.md
+├── bot_telegram.py
+└── .env
 
 ```
 
@@ -163,16 +163,9 @@ python bot_telegram.py
 
 
 2. **Ejemplos de Interacción en Telegram:**
-* **Decodificación Pragmática & Pantallas:** Envia una nota de voz o texto diciendo:
-> *"Un compañero en la escuela me dijo '¡Qué rápido eres!' cuando llegué de último en la carrera. Además, organízame 2 horas de tablet a las 17:00."*
-
-
-* **Ocio Offline:** Envía el mensaje:
-> *"Estoy aburrido, ¿qué podemos jugar?"*
-
-
-* **Alerta SOS:** Envía una nota de voz o texto reportando crisis:
-> *"agy, el niño está teniendo un meltdown muy fuerte en este momento, tiró la tablet y hay mucho llanto."*
+* **Decodificación & Pantallas:** *"Un compañero dijo '¡Qué rápido eres!' cuando llegué de último. Además, organízame 2 horas de tablet a las 17:00."*
+* **Ocio Offline:** *"Estoy aburrido, ¿qué podemos jugar?"*
+* **Alerta SOS:** *"agy, el niño está teniendo un meltdown muy fuerte en este momento."*
 
 
 
@@ -186,18 +179,18 @@ python bot_telegram.py
 
 ### Project Overview
 
-The **ASD Family Assistant** is an agentic framework built on top of **Antigravity (`agy CLI`)** and powered by **Gemini 3.6 Flash** via the Google GenAI SDK. Tailored specifically for families with members on the Autism Spectrum Disorder (ASD), the assistant operates as a daily routine orchestrator, cognitive mediator, and real-time sensory self-regulation support tool.
+The **ASD Family Assistant** is an agentic system built on **Antigravity (`agy CLI`)** and powered by **Google GenAI**. Specifically designed for families with members on the Autism Spectrum (ASD), it acts as a daily routine orchestrator, cognitive mediator, and real-time sensory self-regulation support.
 
-The system interacts bidirectionally using voice and text through **Telegram**, executing autonomous agentic decisions on **Google Calendar** (via the MCP protocol) and synthesizing spoken responses via **edge-tts**.
+The system interacts bidirectionally via **Telegram**, using **Gemini 3.6 Flash** for agentic decision-making, while executing operations on **Google Calendar** via a dedicated client and synthesizing speech with **edge-tts**.
 
 ### Key Features
 
-* 🧠 **Pragmatic & Social Decoder:** Translates metaphors, sarcasm, and irony that the user fails to understand in school or social environments, explaining real intentions and suggesting assertive responses.
-* 📱 **Age-Based Agentic Screen Control:** Autonomously limits recreational screen time (max 40-45 min for a 7-year-old) and automatically schedules a *Transition Alert (5 min left)* event in Google Calendar to prevent melt-downs due to abrupt transitions.
-* 🎨 **Offline Play (Zero Digital):** When boredom is reported, it blocks all digital/video game suggestions and deploys real-world alternatives (narrative role-playing, arts and crafts, motor games, and interactive storytelling).
-* 🚨 **SOS Self-Regulation Protocol:** Detects meltdown states or sensory overload, immediately clears afternoon cognitive tasks/screens from Google Calendar, blocks 2 hours of environmental decompression, and guides caregivers in a slow, calming voice.
-* 🥗 **GFCF Nutritional Filter:** Recommends meal plans while strictly excluding gluten, casein/dairy, and artificial food dyes (Tartrazine, Red 40).
-* 👤 **Persistent Identity Memory:** Consistently maintains the family-assigned name (e.g., *Catalina*) across system restarts via local storage.
+* 🧠 **Pragmatic & Social Decoder:** Translates metaphors and sarcasm, explaining real intent and suggesting assertive responses.
+* 📱 **Agentic Screen Control:** Limits recreational time and manages transition alerts in Google Calendar to prevent meltdowns.
+* 🎨 **Offline Play (Zero Digital):** Replaces digital suggestions with real-world alternatives when boredom is reported.
+* 🚨 **SOS Self-Regulation Protocol:** Detects crises, clears cognitive tasks from the agenda, blocks decompression time, and guides caregivers.
+* 🥗 **GFCF Nutritional Filter:** Recommends meal plans excluding gluten, dairy, and artificial dyes.
+* 👤 **Persistent Identity Memory:** Maintains the user's name (e.g., *Catalina*) via local storage.
 
 ---
 
@@ -207,19 +200,17 @@ The system interacts bidirectionally using voice and text through **Telegram**, 
 [ Telegram Client (Audio/Text) ]
                │
                ▼
-   [ bot_telegram.py (Python) ] ── (OAuth token.json Audit)
-               │
-      ┌────────┴────────────────────────┐
-      │                                 │ (.ogg Audio)
-      ▼                                 ▼
-[ agy CLI Engine ]             [ Google GenAI SDK ]
- (gemini-3.6-flash)             (gemini-3.6-flash STT)
-      │                                 │
-      ├── .agents/skills/               └──────► Speech-to-Text
-      └── MCP Google Calendar
-               │
-               ▼
-   [ Formatted Response ] ──► [ edge-tts Cloud ] ──► [ Telegram Output (Audio + Text) ]
+   [ bot_telegram.py (Python) ]
+      │         │         │
+      │         │         └── calendar_client.py ──► Google Calendar API v3
+      │         │                (Event orchestration)
+      │         │
+      │         └── (Audio/Text) ──► Google GenAI (Gemini 3.6 Flash)
+      │                                      │
+      │                                      ▼
+      │                             [ agy CLI Engine ]
+      ▼
+   [ edge-tts Cloud ] ──► [ Telegram Output (Audio + Text) ]
 
 ```
 
@@ -227,12 +218,12 @@ The system interacts bidirectionally using voice and text through **Telegram**, 
 
 ### Prerequisites
 
-* Operating System: Linux (tested on Debian Trixie / Ubuntu), macOS, or WSL2 on Windows.
-* Python 3.10+ and `python3-venv`.
-* Antigravity CLI (`agy`) installed globally.
-* A Telegram Account and a Bot created via [@BotFather](https://www.google.com/search?q=https://t.me/BotFather).
-* Google AI Studio / Google AI Pro API Key (`GEMINI_API_KEY`).
-* Google Cloud OAuth 2.0 Credentials for Google Calendar MCP Server (`credentials.json`).
+* OS: Linux, macOS, or WSL2.
+* Python 3.10+.
+* Antigravity CLI (`agy`) installed.
+* Telegram Account and Bot created via [@BotFather](https://www.google.com/search?q=https://t.me/BotFather).
+* Google AI Studio API Key (`GEMINI_API_KEY`).
+* Google Cloud OAuth 2.0 Credentials (`credentials.json`).
 
 ---
 
@@ -269,14 +260,14 @@ Create a `.env` file in the root directory:
 TELEGRAM_BOT_TOKEN="your_telegram_bot_token_here"
 GEMINI_API_KEY="your_gemini_api_key_here"
 GOOGLE_APPLICATION_CREDENTIALS="credentials.json"
+GOOGLE_CALENDAR_EMAIL="your_email@gmail.com"
 
 ```
 
 
-5. **Configure Google Cloud and authorize Google Calendar (MCP):**
+5. **Configure Google Cloud and authorize Google Calendar:**
 
    **5a. Create OAuth credentials in Google Cloud Console:**
-   - Go to [console.cloud.google.com](https://console.cloud.google.com) and create or select a project.
    - Enable the **Google Calendar API**: APIs & Services → Library → search "Google Calendar API" → Enable.
    - Create credentials: APIs & Services → Credentials → Create Credentials → **OAuth 2.0 Client ID** → Application type: **Desktop app**.
    - Download the JSON and rename it to `credentials.json` in the project root.
@@ -313,14 +304,15 @@ asistente-tea/
 │   ├── protocolo_sos.md
 │   └── decodificador_pragmatico.md
 ├── tools/
-│   ├── google_calendar_mcp.py    # Stdio MCP server — Google Calendar API v3 (live)
+│   ├── calendar_client.py        # Direct Google Calendar API v3 client (used by the bot)
+│   ├── google_calendar_mcp.py    # Stdio MCP server (for interactive agy usage)
 │   └── authorize_calendar.py     # One-time OAuth2 authorization script
 ├── assistant_name.txt            # Persistent agent identity storage
 ├── agy.config.json               # Main agy CLI configuration
 ├── requirements.txt              # Python dependencies (Google Calendar API)
 ├── system_prompt.md              # Master system prompt
 ├── bot_telegram.py               # Executable entry point
-└── .env                          # Secret environment variables
+└── .env                          # Secret environment variables (includes GOOGLE_CALENDAR_EMAIL)
 
 ```
 
