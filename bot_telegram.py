@@ -14,6 +14,15 @@ from telegram.request import HTTPXRequest  # Importante para los timeouts de red
 from google import genai
 import edge_tts
 
+# Integración directa de Google Calendar (evita dependencia del MCP en agy run headless)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from tools.calendar_client import get_events, create_event, delete_event, update_event
+    CALENDAR_AVAILABLE = True
+except ImportError as _cal_err:
+    CALENDAR_AVAILABLE = False
+    logging.warning(f"calendar_client no disponible: {_cal_err}")
+
 # 1. Logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -81,11 +90,29 @@ async def execute_agy_prompt(user_prompt: str) -> str:
     now_context = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
 
     try:
+        # Pre-fetch Google Calendar — inyectar datos como contexto (MCP no disponible en headless)
+        calendar_context = ""
+        if CALENDAR_AVAILABLE:
+            try:
+                cal_data = get_events(days=7)
+                n_events = len(cal_data['events'])
+                n_today  = len(cal_data['today'])
+                calendar_context = (
+                    f" [Google Calendar talessystems.hq@gmail.com — {now_context}]"
+                    f" Próximos 7 días ({n_events} eventos): "
+                    + json.dumps(cal_data['events'], ensure_ascii=False)
+                    + f" | HOY ({n_today} eventos): "
+                    + json.dumps(cal_data['today'], ensure_ascii=False)
+                    + "."
+                )
+            except Exception as _cal_ex:
+                calendar_context = f" [Google Calendar: no disponible — {_cal_ex}]."
+
         contextualized_prompt = (
             f"[Contexto de Sistema: Tu nombre asignado es '{current_name}'. "
-            f"Fecha y hora actual del sistema: {now_context}. "
-            f"Tienes el servidor MCP de Google Calendar ACTIVO en la cuenta talessystems.hq@gmail.com. "
-            f"Eres el Asistente Familiar TEA. PROHIBIDO ofrecer videojuegos o código.] "
+            f"Fecha y hora actual del sistema: {now_context}."
+            f"{calendar_context}"
+            f" Eres el Asistente Familiar TEA. PROHIBIDO ofrecer videojuegos o código.] "
             f"Usuario dice: {user_prompt}"
         )
         safe_prompt = shlex.quote(contextualized_prompt)
@@ -111,6 +138,8 @@ async def execute_agy_prompt(user_prompt: str) -> str:
         error_output = stderr.decode("utf-8").strip()
 
         base_response = output or error_output or f"Soy {current_name}. ¿En qué te ayudo?"
+        # Parsear y ejecutar operaciones de calendario embebidas en la respuesta
+        base_response, _ = parse_and_execute_calendar_ops(base_response)
         oauth_warning = check_oauth_expiration_warning()
         return base_response + oauth_warning
 
@@ -120,6 +149,45 @@ async def execute_agy_prompt(user_prompt: str) -> str:
     except Exception as e:
         logger.error(f"Error ejecutando agy CLI: {str(e)}")
         return f"Error ejecutando agy CLI: {str(e)}"
+
+_CAL_OP_RE = re.compile(r'\[📅\s*(\w+)\s*:\s*(\{.*?\})\]', re.DOTALL)
+
+def parse_and_execute_calendar_ops(response: str) -> tuple:
+    """
+    Busca tags [📅 OPERACION: {...}] en la respuesta del agente,
+    los ejecuta en Google Calendar y los elimina del texto visible.
+    Retorna (texto_limpio, lista_de_resultados).
+    """
+    ops_log = []
+
+    if not CALENDAR_AVAILABLE:
+        return response, ops_log
+
+    def _run_op(match):
+        op   = match.group(1).upper()
+        raw  = match.group(2)
+        try:
+            args = json.loads(raw)
+            if op == "CREAR_EVENTO":
+                result = create_event(**args)
+                ops_log.append(f"✅ Evento creado: {result.get('summary')}")
+            elif op == "ELIMINAR_EVENTO":
+                result = delete_event(args["event_id"])
+                ops_log.append(f"🗑️ Evento eliminado: {args['event_id']}")
+            elif op == "ACTUALIZAR_EVENTO":
+                result = update_event(**args)
+                ops_log.append(f"✏️ Evento actualizado: {args.get('event_id')}")
+            else:
+                ops_log.append(f"⚠️ Operación desconocida: {op}")
+        except Exception as _e:
+            ops_log.append(f"❌ Error en {op}: {_e}")
+        return ""   # Elimina el tag del texto visible
+
+    clean = _CAL_OP_RE.sub(_run_op, response).strip()
+    if ops_log:
+        logger.info(f"[Calendar ops] {ops_log}")
+    return clean, ops_log
+
 
 async def text_to_speech(text_content: str, output_audio_path: str, is_sos: bool = False):
     voice = "es-ES-ElviraNeural"
