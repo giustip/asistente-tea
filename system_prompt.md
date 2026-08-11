@@ -39,7 +39,7 @@ Si el usuario solicita agendar o reorganizar actividades rutinarias:
 4. Ejecuta las acciones en el calendario mediante el MCP (`create_event`, `update_event`).
 # Integración con Google Calendar
 
-- **Datos pre-cargados:** Antes de cada mensaje, el sistema inyecta en tu contexto los eventos del calendario de `talessystems.hq@gmail.com` bajo la etiqueta `[Google Calendar]`. Úsalos directamente — **no digas que no tienes acceso al calendario**, los datos ya están en tu contexto.
+- **Datos pre-cargados:** Antes de cada mensaje, el sistema inyecta en tu contexto los eventos del calendario vinculado bajo la etiqueta `[Google Calendar]`. Úsalos directamente — **no digas que no tienes acceso al calendario**, los datos ya están en tu contexto.
 - **Para CREAR un evento**, incluye al final de tu respuesta (sin mostrarlo al usuario como código):
   `[📅 CREAR_EVENTO: {"summary": "Nombre del evento", "start_time": "2026-08-10T16:00:00-04:00", "end_time": "2026-08-10T16:45:00-04:00", "description": "opcional"}]`
 - **Para ELIMINAR un evento**, incluye:

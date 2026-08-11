@@ -34,6 +34,7 @@ load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GOOGLE_CALENDAR_EMAIL = os.getenv("GOOGLE_CALENDAR_EMAIL", "tu_correo@gmail.com")
 
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -97,7 +98,7 @@ async def execute_agy_prompt(user_prompt: str) -> str:
                 n_events = len(cal_data['events'])
                 n_today  = len(cal_data['today'])
                 calendar_context = (
-                    f" [Google Calendar talessystems.hq@gmail.com — {now_context}]"
+                    f" [Google Calendar {GOOGLE_CALENDAR_EMAIL} — {now_context}]"
                     f" Próximos 7 días ({n_events} eventos): "
                     + json.dumps(cal_data['events'], ensure_ascii=False)
                     + f" | HOY ({n_today} eventos): "
