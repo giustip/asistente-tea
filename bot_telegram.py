@@ -67,9 +67,8 @@ def check_oauth_expiration_warning() -> str:
                 return "\n\n⚠️ **Alerta OAuth:** La sesión de Google OAuth ha expirado. Vuelve a autenticarte para renovar `token.json`."
             elif hours_left < 1:
                 minutes_left = int(hours_left * 60)
-                return f"\n\n⚠️ **Recordatorio OAuth:** La sesión de Google expira en {minutes_left} minutos."
-            elif hours_left < 24:
-                return f"\n\n⚠️ **Recordatorio OAuth:** La sesión de Google expira en {int(hours_left)} horas."
+                if minutes_left <= 5:
+                    return f"\n\n⚠️ **Recordatorio OAuth:** La sesión de Google expira en {minutes_left} minutos."
     except Exception as e:
         logger.warning(f"Error verificando OAuth: {e}")
     return ""
