@@ -3,18 +3,17 @@ import os
 import sys
 import json
 import asyncio
-import subprocess
 import logging
-import shlex
 import re
+import glob
 from datetime import datetime, timezone
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
-from telegram.request import HTTPXRequest  # Importante para los timeouts de red
+from telegram.request import HTTPXRequest
 from google import genai
 import edge_tts
 
-# Integración directa de Google Calendar (evita dependencia del MCP en agy run headless)
+# Integración directa de Google Calendar
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from tools.calendar_client import get_events, create_event, delete_event, update_event
@@ -39,6 +38,7 @@ GOOGLE_CALENDAR_EMAIL = os.getenv("GOOGLE_CALENDAR_EMAIL", "tu_correo@gmail.com"
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 NAME_FILE = "assistant_name.txt"
+MEMORY_FILE = "memory.md"
 
 def get_assistant_name() -> str:
     if os.path.exists(NAME_FILE):
@@ -50,6 +50,37 @@ def get_assistant_name() -> str:
 def set_assistant_name(new_name: str):
     with open(NAME_FILE, "w") as f:
         f.write(new_name.strip())
+
+def load_knowledge_base() -> str:
+    kb_text = []
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 1. Leer system prompt base
+    sys_prompt_path = os.path.join(base_dir, "system_prompt.md")
+    if os.path.exists(sys_prompt_path):
+        with open(sys_prompt_path, "r", encoding="utf-8") as f:
+            kb_text.append(f.read())
+            
+    # 2. Leer base de conocimiento
+    knowledge_dir = os.path.join(base_dir, "knowledge")
+    if os.path.exists(knowledge_dir):
+        kb_text.append("\n\n--- BASE DE CONOCIMIENTO ---")
+        for md_file in glob.glob(os.path.join(knowledge_dir, "*.md")):
+            with open(md_file, "r", encoding="utf-8") as f:
+                kb_text.append(f"\n# {os.path.basename(md_file)}\n")
+                kb_text.append(f.read())
+                
+    # 3. Leer skills
+    skills_dir = os.path.join(base_dir, ".agents", "skills")
+    if os.path.exists(skills_dir):
+        kb_text.append("\n\n--- SKILLS (Habilidades) ---")
+        for md_file in glob.glob(os.path.join(skills_dir, "**", "SKILL.md"), recursive=True):
+            with open(md_file, "r", encoding="utf-8") as f:
+                skill_name = os.path.basename(os.path.dirname(md_file))
+                kb_text.append(f"\n# Skill: {skill_name}\n")
+                kb_text.append(f.read())
+                
+    return "\n".join(kb_text)
 
 def check_oauth_expiration_warning() -> str:
     token_path = "token.json"
@@ -74,7 +105,7 @@ def check_oauth_expiration_warning() -> str:
         logger.warning(f"Error verificando OAuth: {e}")
     return ""
 
-async def execute_agy_prompt(user_prompt: str) -> str:
+async def execute_agent_prompt(user_prompt: str) -> str:
     current_name = get_assistant_name()
     
     match_name = re.search(
@@ -90,7 +121,6 @@ async def execute_agy_prompt(user_prompt: str) -> str:
     now_context = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
 
     try:
-        # Pre-fetch Google Calendar — inyectar datos como contexto (MCP no disponible en headless)
         calendar_context = ""
         if CALENDAR_AVAILABLE:
             try:
@@ -98,68 +128,60 @@ async def execute_agy_prompt(user_prompt: str) -> str:
                 n_events = len(cal_data['events'])
                 n_today  = len(cal_data['today'])
                 calendar_context = (
-                    f" [Google Calendar {GOOGLE_CALENDAR_EMAIL} — {now_context}]"
-                    f" Próximos 7 días ({n_events} eventos): "
+                    f"\n[Google Calendar {GOOGLE_CALENDAR_EMAIL} — {now_context}]\n"
+                    f"Próximos 7 días ({n_events} eventos): "
                     + json.dumps(cal_data['events'], ensure_ascii=False)
                     + f" | HOY ({n_today} eventos): "
                     + json.dumps(cal_data['today'], ensure_ascii=False)
-                    + "."
+                    + ".\n"
                 )
             except Exception as _cal_ex:
-                calendar_context = f" [Google Calendar: no disponible — {_cal_ex}]."
+                calendar_context = f"\n[Google Calendar: no disponible — {_cal_ex}].\n"
+                
+        # Cargar memoria activa
+        memory_context = ""
+        if os.path.exists(MEMORY_FILE):
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                memory_content = f.read().strip()
+                if memory_content:
+                    memory_context = f"\n[Memoria Activa]\n{memory_content}\n"
 
+        system_instruction = load_knowledge_base()
+        
         contextualized_prompt = (
             f"[Contexto de Sistema: Tu nombre asignado es '{current_name}'. "
             f"Fecha y hora actual del sistema: {now_context}."
             f"{calendar_context}"
-            f" Eres el Asistente Familiar TEA. PROHIBIDO ofrecer videojuegos o código.] "
+            f"{memory_context}"
+            f" Eres el Asistente Familiar TEA. PROHIBIDO ofrecer videojuegos o código.]\n\n"
             f"Usuario dice: {user_prompt}"
         )
-        safe_prompt = shlex.quote(contextualized_prompt)
-        cmd = f"echo {safe_prompt} | agy run --config agy.config.json --dangerously-skip-permissions"
-        
-        project_dir = os.path.dirname(os.path.abspath(__file__))
 
-        # Preparar variables de entorno heredando del sistema y forzando GOOGLE_APPLICATION_CREDENTIALS
-        env_vars = os.environ.copy()
-        env_vars["GOOGLE_APPLICATION_CREDENTIALS"] = os.path.join(project_dir, "credentials.json")
-
-        process = await asyncio.create_subprocess_exec(
-            "bash", "-c", cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=project_dir,
-            env=env_vars  # Inyección de variables de entorno al proceso de agy y MCP
+        logger.info("Enviando prompt a Gemini 3.6 Pro...")
+        gemini_response = ai_client.models.generate_content(
+            model="gemini-3.6-pro",
+            contents=[contextualized_prompt],
+            config={"system_instruction": system_instruction, "temperature": 0.2}
         )
         
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=45.0)
-        
-        output = stdout.decode("utf-8").strip()
-        error_output = stderr.decode("utf-8").strip()
+        base_response = gemini_response.text.strip()
+        if not base_response:
+            base_response = f"Soy {current_name}. ¿En qué te ayudo?"
 
-        base_response = output or error_output or f"Soy {current_name}. ¿En qué te ayudo?"
-        # Parsear y ejecutar operaciones de calendario embebidas en la respuesta
         base_response, _ = parse_and_execute_calendar_ops(base_response)
+        base_response = parse_and_execute_memory_ops(base_response)
         oauth_warning = check_oauth_expiration_warning()
         return base_response + oauth_warning
 
-    except asyncio.TimeoutError:
-        logger.error("agy CLI superó el tiempo límite.")
-        return "⏱️ Tardé un poco más de lo esperado en procesar la consulta."
     except Exception as e:
-        logger.error(f"Error ejecutando agy CLI: {str(e)}")
-        return f"Error ejecutando agy CLI: {str(e)}"
+        logger.error(f"Error ejecutando Gemini API: {str(e)}")
+        return f"Error ejecutando Gemini API: {str(e)}"
 
 _CAL_OP_RE = re.compile(r'\[📅\s*(\w+)\s*:\s*(\{.*?\})\]', re.DOTALL)
+_MEM_OP_RE = re.compile(r'\[🧠\s*MEMORIA\s*:\s*"(.*?)"\]', re.DOTALL | re.IGNORECASE)
 
 def parse_and_execute_calendar_ops(response: str) -> tuple:
-    """
-    Busca tags [📅 OPERACION: {...}] en la respuesta del agente,
-    los ejecuta en Google Calendar y los elimina del texto visible.
-    Retorna (texto_limpio, lista_de_resultados).
-    """
     ops_log = []
-
     if not CALENDAR_AVAILABLE:
         return response, ops_log
 
@@ -181,13 +203,26 @@ def parse_and_execute_calendar_ops(response: str) -> tuple:
                 ops_log.append(f"⚠️ Operación desconocida: {op}")
         except Exception as _e:
             ops_log.append(f"❌ Error en {op}: {_e}")
-        return ""   # Elimina el tag del texto visible
-
+        return ""
+        
     clean = _CAL_OP_RE.sub(_run_op, response).strip()
     if ops_log:
         logger.info(f"[Calendar ops] {ops_log}")
     return clean, ops_log
 
+def parse_and_execute_memory_ops(response: str) -> str:
+    def _save_memory(match):
+        memory_text = match.group(1).strip()
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        try:
+            with open(MEMORY_FILE, "a", encoding="utf-8") as f:
+                f.write(f"- [{timestamp}] {memory_text}\n")
+            logger.info(f"[Memoria guardada]: {memory_text}")
+        except Exception as e:
+            logger.error(f"Error guardando memoria: {e}")
+        return ""
+        
+    return _MEM_OP_RE.sub(_save_memory, response).strip()
 
 async def text_to_speech(text_content: str, output_audio_path: str, is_sos: bool = False):
     voice = "es-ES-ElviraNeural"
@@ -202,24 +237,22 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
     user_input_text = ""
     current_name = get_assistant_name()
 
-    # 1. Caso Nota de Voz
     if update.message.voice or update.message.audio:
-        print("\n[Telegram] 🎙️ Transcribiendo audio con gemini-3.6-flash...")
+        print("\n[Telegram] 🎙️ Transcribiendo audio con gemini-3.6-pro...")
         status_msg = await update.message.reply_text("🎙️ Transcribiendo audio...")
         voice_path = f"temp_{update.message.message_id}.ogg"
 
         try:
-            # Descargar archivo con manejo seguro de timeouts
             file_obj = await (update.message.voice or update.message.audio).get_file(read_timeout=60.0)
             await file_obj.download_to_drive(voice_path, read_timeout=60.0)
 
             uploaded_file = ai_client.files.upload(file=voice_path)
             gemini_response = ai_client.models.generate_content(
-                model="gemini-3.6-flash",
+                model="gemini-3.6-pro",
                 contents=[uploaded_file, "Transcribe exactamente el contenido de este audio en español."]
             )
             user_input_text = gemini_response.text.strip()
-            print(f"[Transcripción Gemini 3.6 Flash]: {user_input_text}")
+            print(f"[Transcripción Gemini 3.6 Pro]: {user_input_text}")
 
         except Exception as e:
             logger.error(f"Error procesando/descargando audio en Telegram: {e}")
@@ -232,7 +265,6 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
                 os.remove(voice_path)
             await status_msg.delete()
     
-    # 2. Caso Texto Directo
     elif update.message.text:
         user_input_text = update.message.text.strip()
         print(f"\n[Telegram] 💬 Texto recibido: '{user_input_text}'")
@@ -241,7 +273,7 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     processing_msg = await update.message.reply_text(f"⚙️ {current_name} evaluando contexto...")
-    agent_response = await execute_agy_prompt(user_input_text)
+    agent_response = await execute_agent_prompt(user_input_text)
     await processing_msg.delete()
 
     current_name = get_assistant_name()
@@ -265,17 +297,15 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Error en síntesis de voz: {e}")
 
 def main():
-    # Ampliación de timeouts de red HTTPX para Telegram
     request_config = HTTPXRequest(
         connect_timeout=30.0,
         read_timeout=60.0,
         write_timeout=30.0,
         pool_timeout=30.0
     )
-
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).request(request_config).build()
     app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO | filters.TEXT, handle_voice_or_text))
-    print(f"🤖 Bot iniciado (Timeouts de red ampliados / Nombre activo: {get_assistant_name()})...")
+    print(f"🤖 Bot iniciado (Motor GenAI Directo / Nombre activo: {get_assistant_name()})...")
     app.run_polling()
 
 if __name__ == "__main__":
