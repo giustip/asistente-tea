@@ -12,7 +12,7 @@
 
 ### Descripción del Proyecto
 
-El **Asistente Familiar TEA** es un sistema agéntico desarrollado en Python y alimentado por **Gemini 3.6 Flash (con razonamiento extendido)** a través del **Antigravity Python SDK (`google-antigravity`)**. Diseñado específicamente para familias con integrantes dentro del Espectro Autista (TEA), el asistente actúa como un orquestador de rutinas cotidianas, mediador cognitivo y soporte de autorregulación sensorial en tiempo real.
+El **Asistente Familiar TEA** es un sistema agéntico desarrollado en Python y alimentado por **Gemini 3.6 Flash (con razonamiento extendido)** a través del **Google GenAI SDK**. Diseñado específicamente para familias con integrantes dentro del Espectro Autista (TEA), el asistente actúa como un orquestador de rutinas cotidianas, mediador cognitivo y soporte de autorregulación sensorial en tiempo real.
 
 El sistema interactúa de forma bidireccional mediante voz y texto a través de **Telegram**, ejecutando decisiones agénticas autónomas sobre la agenda de **Google Calendar** (integración directa con la API v3) y sintetizando respuestas habladas mediante **edge-tts**.
 
@@ -40,8 +40,8 @@ El sistema interactúa de forma bidireccional mediante voz y texto a través de 
       │         └── (Audio .ogg) ──► Google GenAI SDK (STT) ──► Transcripción
       │
       ▼
-[ Antigravity Python SDK ]
- (gemini-3.6-flash via OAuth)
+[ Google GenAI SDK ]
+ (gemini-3.6-flash)
       │
       ▼
    [ Respuesta + [📅 OP] + [🧠 MEMORIA] ] ──► bot parsea ops ──► Calendar / memory.md
@@ -86,7 +86,7 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install python-telegram-bot google-genai edge-tts python-dotenv google-antigravity
+pip install python-telegram-bot google-genai edge-tts python-dotenv
 
 ```
 
@@ -176,7 +176,7 @@ python bot_telegram.py
 
 ### Project Overview
 
-The **ASD Family Assistant** is an agentic system built in Python and powered by **Gemini 3.6 Flash (with extended reasoning)** via the **Antigravity Python SDK (`google-antigravity`)**. Specifically designed for families with members on the Autism Spectrum (ASD), it acts as a daily routine orchestrator, cognitive mediator, and real-time sensory self-regulation support.
+The **ASD Family Assistant** is an agentic system built in Python and powered by **Gemini 3.6 Flash (with extended reasoning)** via the **Google GenAI SDK**. Specifically designed for families with members on the Autism Spectrum (ASD), it acts as a daily routine orchestrator, cognitive mediator, and real-time sensory self-regulation support.
 
 The system interacts bidirectionally via **Telegram**, using **Gemini 3.6 Flash** for agentic decision-making, while executing operations on **Google Calendar** via a dedicated client and synthesizing speech with **edge-tts**.
 
@@ -204,8 +204,8 @@ The system interacts bidirectionally via **Telegram**, using **Gemini 3.6 Flash*
       │         └── (Audio .ogg) ──► Google GenAI SDK (STT) ──► Transcription
       │
       ▼
-[ Antigravity Python SDK ]
- (gemini-3.6-flash via OAuth)
+[ Google GenAI SDK ]
+ (gemini-3.6-flash)
       │
       ▼
    [ Response + [📅 OP] + [🧠 MEMORIA] ] ──► bot parses ops ──► Calendar / memory.md
@@ -250,7 +250,7 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install python-telegram-bot google-genai edge-tts python-dotenv google-antigravity
+pip install python-telegram-bot google-genai edge-tts python-dotenv
 
 ```
 
