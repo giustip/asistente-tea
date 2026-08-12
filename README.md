@@ -12,7 +12,7 @@
 
 ### Descripción del Proyecto
 
-El **Asistente Familiar TEA** es un sistema agéntico desarrollado sobre **Antigravity (`agy CLI`)** y alimentado por **Gemini 3.6 Flash** a través del SDK de Google GenAI. Diseñado específicamente para familias con integrantes dentro del Espectro Autista (TEA), el asistente actúa como un orquestador de rutinas cotidianas, mediador cognitivo y soporte de autorregulación sensorial en tiempo real.
+El **Asistente Familiar TEA** es un sistema agéntico desarrollado en Python y alimentado por **Gemini 3.6 Flash (con razonamiento extendido)** a través del **Antigravity Python SDK (`google-antigravity`)**. Diseñado específicamente para familias con integrantes dentro del Espectro Autista (TEA), el asistente actúa como un orquestador de rutinas cotidianas, mediador cognitivo y soporte de autorregulación sensorial en tiempo real.
 
 El sistema interactúa de forma bidireccional mediante voz y texto a través de **Telegram**, ejecutando decisiones agénticas autónomas sobre la agenda de **Google Calendar** (integración directa con la API v3) y sintetizando respuestas habladas mediante **edge-tts**.
 
@@ -33,24 +33,20 @@ El sistema interactúa de forma bidireccional mediante voz y texto a través de 
 [ Telegram Client (Audio/Texto) ]
                │
                ▼
-   [ bot_telegram.py (Python) ]
+   [ bot_telegram.py (Python) ] ──► (Lee knowledge/*.md + memory.md)
       │         │         │
       │         │         └── calendar_client.py ──► Google Calendar API v3
-      │         │                (pre-fetch eventos + ejecutar operaciones)
       │         │
       │         └── (Audio .ogg) ──► Google GenAI SDK (STT) ──► Transcripción
       │
       ▼
-[ agy CLI Engine ]
- (gemini-3.6-flash)
+[ Antigravity Python SDK ]
+ (gemini-3.6-flash via OAuth)
       │
-      ├── .agents/skills/
-      └── system_prompt.md
-               │
-               ▼
-   [ Respuesta + [📅 OP] ] ──► bot parsea ops ──► Calendar API
-               │
-               ▼
+      ▼
+   [ Respuesta + [📅 OP] + [🧠 MEMORIA] ] ──► bot parsea ops ──► Calendar / memory.md
+      │
+      ▼
    [ edge-tts Cloud ] ──► [ Salida Telegram (Audio + Texto) ]
 
 ```
@@ -90,7 +86,7 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install python-telegram-bot google-genai edge-tts python-dotenv
+pip install python-telegram-bot google-genai edge-tts python-dotenv google-antigravity
 
 ```
 
@@ -142,6 +138,7 @@ asistente-tea/
 │   ├── google_calendar_mcp.py
 │   └── authorize_calendar.py
 ├── assistant_name.txt
+├── memory.md                     # Memoria persistente a largo plazo
 ├── agy.config.json
 ├── requirements.txt
 ├── system_prompt.md
@@ -179,7 +176,7 @@ python bot_telegram.py
 
 ### Project Overview
 
-The **ASD Family Assistant** is an agentic system built on **Antigravity (`agy CLI`)** and powered by **Google GenAI**. Specifically designed for families with members on the Autism Spectrum (ASD), it acts as a daily routine orchestrator, cognitive mediator, and real-time sensory self-regulation support.
+The **ASD Family Assistant** is an agentic system built in Python and powered by **Gemini 3.6 Flash (with extended reasoning)** via the **Antigravity Python SDK (`google-antigravity`)**. Specifically designed for families with members on the Autism Spectrum (ASD), it acts as a daily routine orchestrator, cognitive mediator, and real-time sensory self-regulation support.
 
 The system interacts bidirectionally via **Telegram**, using **Gemini 3.6 Flash** for agentic decision-making, while executing operations on **Google Calendar** via a dedicated client and synthesizing speech with **edge-tts**.
 
@@ -200,15 +197,19 @@ The system interacts bidirectionally via **Telegram**, using **Gemini 3.6 Flash*
 [ Telegram Client (Audio/Text) ]
                │
                ▼
-   [ bot_telegram.py (Python) ]
+   [ bot_telegram.py (Python) ] ──► (Reads knowledge/*.md + memory.md)
       │         │         │
       │         │         └── calendar_client.py ──► Google Calendar API v3
-      │         │                (Event orchestration)
       │         │
-      │         └── (Audio/Text) ──► Google GenAI (Gemini 3.6 Flash)
-      │                                      │
-      │                                      ▼
-      │                             [ agy CLI Engine ]
+      │         └── (Audio .ogg) ──► Google GenAI SDK (STT) ──► Transcription
+      │
+      ▼
+[ Antigravity Python SDK ]
+ (gemini-3.6-flash via OAuth)
+      │
+      ▼
+   [ Response + [📅 OP] + [🧠 MEMORIA] ] ──► bot parses ops ──► Calendar / memory.md
+      │
       ▼
    [ edge-tts Cloud ] ──► [ Telegram Output (Audio + Text) ]
 
@@ -249,7 +250,7 @@ source venv/bin/activate
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
-pip install python-telegram-bot google-genai edge-tts python-dotenv
+pip install python-telegram-bot google-genai edge-tts python-dotenv google-antigravity
 
 ```
 
@@ -308,6 +309,7 @@ asistente-tea/
 │   ├── google_calendar_mcp.py    # Stdio MCP server (for interactive agy usage)
 │   └── authorize_calendar.py     # One-time OAuth2 authorization script
 ├── assistant_name.txt            # Persistent agent identity storage
+├── memory.md                     # Long-term persistent memory
 ├── agy.config.json               # Main agy CLI configuration
 ├── requirements.txt              # Python dependencies (Google Calendar API)
 ├── system_prompt.md              # Master system prompt

@@ -161,7 +161,7 @@ async def execute_agent_prompt(user_prompt: str) -> str:
         logger.info("Enviando prompt a google-antigravity SDK (OAuth)...")
         config = LocalAgentConfig(
             system_instructions=system_instruction,
-            model="gemini-3.6-pro"
+            model="gemini-3.6-flash"
         )
         async with Agent(config) as agent:
             response_stream = await agent.chat(contextualized_prompt)
@@ -243,7 +243,7 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
     current_name = get_assistant_name()
 
     if update.message.voice or update.message.audio:
-        print("\n[Telegram] 🎙️ Transcribiendo audio con gemini-3.6-pro...")
+        print("\n[Telegram] 🎙️ Transcribiendo audio con gemini-3.6-flash...")
         status_msg = await update.message.reply_text("🎙️ Transcribiendo audio...")
         voice_path = f"temp_{update.message.message_id}.ogg"
 
@@ -253,11 +253,11 @@ async def handle_voice_or_text(update: Update, context: ContextTypes.DEFAULT_TYP
 
             uploaded_file = ai_client.files.upload(file=voice_path)
             gemini_response = ai_client.models.generate_content(
-                model="gemini-3.6-pro",
+                model="gemini-3.6-flash",
                 contents=[uploaded_file, "Transcribe exactamente el contenido de este audio en español."]
             )
             user_input_text = gemini_response.text.strip()
-            print(f"[Transcripción Gemini 3.6 Pro]: {user_input_text}")
+            print(f"[Transcripción Gemini 3.6 Flash]: {user_input_text}")
 
         except Exception as e:
             logger.error(f"Error procesando/descargando audio en Telegram: {e}")

@@ -2,7 +2,7 @@
   "name": "asistente-familiar-tea",
   "version": "1.0.0",
   "description": "Agente de Estructura Familiar y Control TEA",
-  "model": "gemini-3.6-pro",
+  "model": "gemini-3.6-flash",
   "system_prompt_file": "system_prompt.md",
   "workspace_rules": {
     "auto_discover_skills": true,
