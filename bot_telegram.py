@@ -12,6 +12,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 from telegram.request import HTTPXRequest
 from google import genai
 import edge_tts
+from google.antigravity import Agent, LocalAgentConfig
 
 # Integración directa de Google Calendar
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -157,14 +158,18 @@ async def execute_agent_prompt(user_prompt: str) -> str:
             f"Usuario dice: {user_prompt}"
         )
 
-        logger.info("Enviando prompt a Gemini 3.6 Pro...")
-        gemini_response = ai_client.models.generate_content(
-            model="gemini-3.6-pro",
-            contents=[contextualized_prompt],
-            config={"system_instruction": system_instruction, "temperature": 0.2}
+        logger.info("Enviando prompt a google-antigravity SDK (OAuth)...")
+        config = LocalAgentConfig(
+            system_instructions=system_instruction,
+            model="gemini-3.6-pro"
         )
-        
-        base_response = gemini_response.text.strip()
+        async with Agent(config) as agent:
+            response_stream = await agent.chat(contextualized_prompt)
+            full_response = ""
+            async for token in response_stream:
+                full_response += token
+                
+        base_response = full_response.strip()
         if not base_response:
             base_response = f"Soy {current_name}. ¿En qué te ayudo?"
 
