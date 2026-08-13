@@ -2,3 +2,13 @@ credentials.json
 token.json
 settings.json
 .env
+
+# Python / Virtual environment
+__pycache__/
+*.pyc
+venv/
+
+# Audio temporales
+temp_*.ogg
+response_*.ogg
+*.ogg

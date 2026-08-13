@@ -23,7 +23,7 @@ El sistema interactúa de forma bidireccional mediante voz y texto a través de 
 * 🎨 **Ocio Offline (Cero Digital):** Ante reportes de aburrimiento, bloquea sugerencias de videojuegos o navegación web y despliega alternativas del mundo real (juegos de rol narrativos, manualidades plásticas, juegos motores y cuentos participativos).
 * 🚨 **Protocolo SOS de Autorregulación:** Detecta estados de crisis (*meltdowns*) o sobrecarga sensorial, despeja inmediatamente tareas cognitivas/pantallas de la tarde en Google Calendar, bloquea 2 horas de descompresión ambiental y guía a los cuidadores con voz pausada.
 * 🥗 **Filtro Nutricional SGSC:** Recomienda menús excluyendo estrictamente gluten, lácteos/caseína y colorantes artificiales (Tartrazina, Rojo 40).
-* 👤 **Memoria de Identidad Persistente:** Mantiene de forma consistente el nombre asignado por la familia (ej. *Catalina*) entre reinicios del sistema mediante almacenamiento local.
+* 👤 **Memoria Persistente a Largo Plazo (`memory.md`):** Mantiene de forma consistente el nombre asignado por la familia (ej. *Catalina*) y registra automáticamente gustos, alergias, rutinas e información clave en `memory.md` para recordarla entre reinicios.
 
 ---
 
@@ -57,7 +57,7 @@ El sistema interactúa de forma bidireccional mediante voz y texto a través de 
 
 * Sistema Operativo: Linux (probado en Debian Trixie / Ubuntu), macOS o WSL2 en Windows.
 * Python 3.10 o superior y el paquete `python3-venv`.
-* Antigravity CLI (`agy`) instalado globalmente.
+* Antigravity CLI (`agy`) opcional para uso interactivo en terminal.
 * Cuenta de Telegram y un Bot creado con [@BotFather](https://www.google.com/search?q=https://t.me/BotFather).
 * Clave de API de Google AI Studio / Google AI Pro (`GEMINI_API_KEY`).
 * Credenciales de Google Cloud OAuth 2.0 para el servidor MCP de Google Calendar (`credentials.json`).
@@ -187,7 +187,7 @@ The system interacts bidirectionally via **Telegram**, using **Gemini 3.6 Flash*
 * 🎨 **Offline Play (Zero Digital):** Replaces digital suggestions with real-world alternatives when boredom is reported.
 * 🚨 **SOS Self-Regulation Protocol:** Detects crises, clears cognitive tasks from the agenda, blocks decompression time, and guides caregivers.
 * 🥗 **GFCF Nutritional Filter:** Recommends meal plans excluding gluten, dairy, and artificial dyes.
-* 👤 **Persistent Identity Memory:** Maintains the user's name (e.g., *Catalina*) via local storage.
+* 👤 **Long-Term Persistent Memory (`memory.md`):** Maintains the family's custom assistant name (e.g., *Catalina*) and dynamically records preferences, allergies, and routines into `memory.md` for seamless context retention across restarts.
 
 ---
 
@@ -221,7 +221,7 @@ The system interacts bidirectionally via **Telegram**, using **Gemini 3.6 Flash*
 
 * OS: Linux, macOS, or WSL2.
 * Python 3.10+.
-* Antigravity CLI (`agy`) installed.
+* Antigravity CLI (`agy`) optional for interactive terminal usage.
 * Telegram Account and Bot created via [@BotFather](https://www.google.com/search?q=https://t.me/BotFather).
 * Google AI Studio API Key (`GEMINI_API_KEY`).
 * Google Cloud OAuth 2.0 Credentials (`credentials.json`).
